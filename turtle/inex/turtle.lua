@@ -44,24 +44,30 @@ Robot = {
     face = Z_POS
 }
 
-function axis_direction_to_face(axis, direction)
-    if axis == 0 and direction = 1 then return X_POS
-    elseif axis == 0 and direction = -1 then return X_NEG
-    elseif axis == 2 and direction = 1 then return Z_POS
-    elseif axis == 2 and direction = -1 then return Z_NEG
+function axis_direction_to_face(axis, d)
+    if axis == 1 and d = 1 then return X_POS
+    elseif axis == 1 and d = -1 then return X_NEG
+    elseif axis == 3 and d = 1 then return Z_POS
+    elseif axis == 3 and d = -1 then return Z_NEG
     else return false
 end
 
+function normalize_direction(axis, direction)
+    local d = 1
+    if direction < 0 then d = -1 end
+    return d
+end
+
 function Robot.move_horizontal(self, direction)
-    if direction = 1 then
+    if direction > 0 then
         if turtle.up() then
-            self.coord[1] = self.coord[1] + 1
+            self.coord[2] = self.coord[2] + 1
         else
             return false
         end
     else
         if turtle.down() then
-            self.coord[1] = self.coord[1] - 1
+            self.coord[2] = self.coord[2] - 1
         else
             return false
         end
@@ -98,10 +104,32 @@ function Robot.face_axis(self, axis, direction)
     end
 end
 
-function Robot.build_walls(self)
-    while true do
-        turtle.dig()
+function Robot.move_to_coord(self, target_coord, dig_path)
+    -- first Y, then X, then Z
+    local directions = {
+        normalize_direction(target_coord[1] - self.coord[1]),
+        normalize_direction(target_coord[2] - self.coord[2]),
+        normalize_direction(target_coord[3] - self.coord[3])
+    }
+    -- Y
+    while self.coord[2] ~= target_coord[2] do
+        self:move_horizontal(directions[2])
     end
+    -- X
+    self:face_axis(1, directions[1])
+    while self.coord[1] ~= target_coord[2] do
+        self:move_forward(1, directions[1])
+    end
+    -- Z
+    self:face_axis(3, directions[3])
+    while self.coord[3] ~= target_coord[3] do
+        self:move_forward(1, directions[3])
+    end
+
+end
+
+function Robot.build_walls(self)
+    self:move_to_coord({10, 0, 5}, false)
 end
 
 function main()
