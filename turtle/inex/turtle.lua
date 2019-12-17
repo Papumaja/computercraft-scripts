@@ -44,6 +44,10 @@ Robot = {
     face = Z_POS
 }
 
+function print_coords(coord)
+    print(coord[1], coord[2], coord[3])
+end
+
 function axis_direction_to_face(axis, d)
     if (axis == 1 and d == 1) then return X_POS
     elseif (axis == 1 and d == -1)  then return X_NEG
@@ -114,23 +118,27 @@ function Robot.move_to_coord(self, target_coord, dig_path)
     -- Y
     while self.coord[2] ~= target_coord[2] do
         self:move_horizontal(directions[2])
+        print_coords(self.coord)
     end
     -- X
     self:face_axis(1, directions[1])
-    while self.coord[1] ~= target_coord[2] do
+    while self.coord[1] ~= target_coord[1] do
         self:move_forward(1, directions[1])
+        print_coords(self.coord)
     end
     -- Z
     self:face_axis(3, directions[3])
     while self.coord[3] ~= target_coord[3] do
-        self:move_forward(1, directions[3])
+        self:move_forward(3, directions[3])
+        print_coords(self.coord)
     end
 
 end
 
 function Robot.build_walls(self)
     turtle.refuel(1)
-    self:move_to_coord({10, 0, 5}, false)
+    self:move_to_coord({0, 0, 5}, false)
+    self:move_to_coord({-5, 0, 5}, false)
 end
 
 function main()
