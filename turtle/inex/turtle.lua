@@ -45,14 +45,14 @@ Robot = {
 }
 
 function axis_direction_to_face(axis, d)
-    if axis == 1 and d = 1 then return X_POS
-    elseif axis == 1 and d = -1 then return X_NEG
-    elseif axis == 3 and d = 1 then return Z_POS
-    elseif axis == 3 and d = -1 then return Z_NEG
-    else return false
+    if (axis == 1 and d == 1) then return X_POS
+    elseif (axis == 1 and d == -1)  then return X_NEG
+    elseif (axis == 3 and d == 1) then return Z_POS
+    elseif (axis == 3 and d == -1)  then return Z_NEG
+    else return false end
 end
 
-function normalize_direction(axis, direction)
+function normalize_direction(direction)
     local d = 1
     if direction < 0 then d = -1 end
     return d
@@ -91,13 +91,13 @@ function Robot.update_face_left(self)
     elseif self.face == X_NEG then self.face = Z_NEG
     elseif self.face == Z_NEG then self.face = X_POS
     elseif self.face == X_POS then self.face = Z_POS
-    else return false
+    else return false end
 end
 
 function Robot.face_axis(self, axis, direction)
     -- 0 = x, 1 = y
     local desired_face = axis_direction_to_face(axis, direction)
-    while self.face ~= desired_face
+    while self.face ~= desired_face do
         if turtle.turnLeft() then
             self:update_face_left()
         end
@@ -129,6 +129,7 @@ function Robot.move_to_coord(self, target_coord, dig_path)
 end
 
 function Robot.build_walls(self)
+    turtle.refuel(1)
     self:move_to_coord({10, 0, 5}, false)
 end
 
