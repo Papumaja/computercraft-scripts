@@ -18,12 +18,9 @@ PHASE_BUILD_WALLS = true
 PHASE_EXCAVATE_INTERIOR = false
 PHASE_BUILD_ROOF = false
 
--- Threshold of inventory stock before refill
-REFUEL_THRESHOLD = 5
-
 -- Corner points (relative to home) of the rectangle to build
 CORNER_NEAR = {0,0,5}
-CORNER_FAR = {-20, 5, 10}
+CORNER_FAR = {-4, 3, 7}
 
 -- "enumerators" for possible turtle faces
 X_POS = 1
@@ -34,11 +31,15 @@ Z_NEG = -2
 -- Turtle settings -------------------------------
 MAX_FUEL = 160 --turtle.getFuelLimit()
 FUEL_ITEM_VALUE = 80
+-- Will break obstructions
+BREAK_THINGS = true
 -- Block types used, others picked up in inventory are discarded
 BUILD_NAME = "minecraft:stone"
 FUEL_NAME = "minecraft:coal"
 -- Inventory slot for fuel
 FUEL_SLOT = 1
+-- Threshold of inventory stock before refill
+REFUEL_THRESHOLD = 5
 -- Inventory slots for building blocks
 BUILD_SLOTS = {2, 3}
 
@@ -49,6 +50,7 @@ Robot = {
     coord = {HOME_COORDS[1], HOME_COORDS[2], HOME_COORDS[3]},
     face = Z_POS,
     build_index = 1,
+    refueling = false
 }
 
 ---- HELPERS ----------------------------------------------------------------
@@ -85,35 +87,38 @@ end
 
 ---- ROBOT METHODS ----------------------------------------------------------
 
-function Robot.move_horizontal(self, direction)
+function Robot.move_horizontal(self, direction, dig_path)
     if direction > 0 then
         if turtle.up() then
             self.coord[2] = self.coord[2] + 1
         else
+            if dig_path then turtle.digUp() end
             return false
         end
     else
         if turtle.down() then
             self.coord[2] = self.coord[2] - 1
         else
+            if dig_path then turtle.digDown() end
             return false
         end
     end
     return true
 end
 
-function Robot.move_forward(self, axis, direction)
+function Robot.move_forward(self, axis, direction, dig_path)
     -- direction +1 or -1
     -- pre: turtle must face correct direction
+    if turtle.forward() then
+        self.coord[axis] = self.coord[axis] + direction
+    else
+        if dig_path then turtle.dig() end
+        return false
+    end
 
     -- TODO: rewrite refueling
     self:refuel_if_need()
 
-    if turtle.forward() then
-        self.coord[axis] = self.coord[axis] + direction
-    else
-        return false
-    end
     return true
 end
 
@@ -140,22 +145,48 @@ function Robot.move_to_coord(self, target_coord, dig_path)
     local directions = get_directions(self.coord, target_coord)
     -- Y
     while self.coord[2] ~= target_coord[2] do
-        self:move_horizontal(directions[2])
+        self:move_horizontal(directions[2], dig_path)
         print_coords(self.coord)
     end
     -- X
     while self.coord[1] ~= target_coord[1] do
         self:face_axis(1, directions[1])
-        self:move_forward(1, directions[1])
+        self:move_forward(1, directions[1], dig_path)
         print_coords(self.coord)
     end
     -- Z
     while self.coord[3] ~= target_coord[3] do
         self:face_axis(3, directions[3])
-        self:move_forward(3, directions[3])
+        self:move_forward(3, directions[3], dig_path)
         print_coords(self.coord)
     end
 
+end
+
+function Robot.restock_fuel_if_need(self)
+    -- already on a restocking trip, don't recurse hang
+    if self.refueling then return end
+
+    local current_slot = turtle.getSelectedSlot()
+    turtle.select(FUEL_SLOT)
+    if turtle.getItemCount() < REFUEL_THRESHOLD then
+        self.refueling = true
+        local current_coord = {self.coord[1], self.coord[2], self.coord[3]}
+        self:go_home_and_restock()
+        self:exit_home()
+        self:move_to_coord(current_coord)
+        self.refueling = false
+    end
+    turtle.select(current_slot)
+end
+
+function Robot.restock_if_need(self)
+    if self.build_index > table.getn(BUILD_SLOTS) then
+        local current_coord = {self.coord[1], self.coord[2], self.coord[3]}
+        self:go_home_and_restock()
+        self:exit_home()
+        self:move_to_coord(current_coord)
+    end
 end
 
 function Robot.refuel_if_need(self)
@@ -167,18 +198,10 @@ function Robot.refuel_if_need(self)
         local n = math.floor(needed/FUEL_ITEM_VALUE)
         local current_slot = turtle.getSelectedSlot()
         turtle.select(FUEL_SLOT)
-        while not turtle.refuel(n) do print("Refueling failed, tried n=",n) end
+        turtle.refuel(n)
+        self:restock_fuel_if_need()
         -- back to original selected slot
         turtle.select(current_slot)
-    end
-end
-
-function Robot.restock_if_need(self)
-    if self.build_index > table.getn(BUILD_SLOTS) then
-        local current_coord = self.coord
-        self:go_home_and_restock()
-        self:exit_home()
-        self:move_to_coord(current_coord)
     end
 end
 
@@ -251,7 +274,7 @@ function Robot.restock_blocks(self)
 end
 
 function Robot.go_home_and_restock(self)
-    self:move_to_coord({HOME_COORDS[1], self.coords[2], HOME_COORDS[3]+2}, false)
+    self:move_to_coord({HOME_COORDS[1], self.coord[2], HOME_COORDS[3]+2}, false)
     self:move_to_coord(HOME_COORDS, false)
     self:face_axis(3, 1)
     self:restock_fuel()
@@ -269,7 +292,7 @@ function Robot.build_line(self, end_coord, axis)
     local direction = get_directions(self.coord, end_coord)
     self:build(false)
     while self.coord[axis] ~= end_coord[axis] do
-        self:move_to_coord(add_coords(self.coord, direction))
+        self:move_to_coord(add_coords(self.coord, direction), BREAK_THINGS)
         self:build(true)
     end
 end
@@ -286,14 +309,14 @@ function Robot.build_walls(self)
     local corner_near = add_coords(CORNER_NEAR,build_offset)
     local corner_far = add_coords(CORNER_FAR,build_offset)
 
-    self:move_to_coord(corner_near, false)
+    self:move_to_coord(corner_near, BREAK_THINGS)
     -- while each y-layer
     while self.coord[2] <= corner_far[2] do
         self:build_line({corner_far[1],self.coord[2], corner_near[3]}, 1)
         self:build_line({corner_far[1],self.coord[2], corner_far[3]}, 3)
         self:build_line({corner_near[1],self.coord[2], corner_far[3]}, 1)
         self:build_line({corner_near[1],self.coord[2], corner_near[3]}, 3)
-        self:move_horizontal(1)
+        while not self:move_horizontal(1, BREAK_THINGS) do print("Obstruction above") end
     end
 
     --- END ---
