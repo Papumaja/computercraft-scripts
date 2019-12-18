@@ -184,13 +184,13 @@ end
 function Robot.select_valid_build_slot(self)
     while true do
         turtle.select(BUILD_SLOTS[self.build_index])
-        self.validate_slot(BUILD_NAME)
+        self:validate_slot(BUILD_NAME)
         local blocks_left = turtle.getItemCount()
 
         if blocks_left < 1 then
             print("out of blocks from", self.build_index)
             self.build_index = self.build_index + 1
-            self.restock_if_need()
+            self:restock_if_need()
         else
             break
         end
@@ -199,7 +199,7 @@ end
 
 function Robot.build(self, dig)
 
-    self.select_valid_build_slot()
+    self:select_valid_build_slot()
     if turtle.detectDown() and dig then
         turtle.digDown()
     end
@@ -241,6 +241,7 @@ function Robot.restock_blocks(self)
             --print("Sucking blocks from above...")
         end
     end
+    self.build_index = 1
 end
 
 function Robot.go_home_and_restock(self)
