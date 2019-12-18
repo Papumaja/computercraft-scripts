@@ -204,7 +204,7 @@ function Robot.build(self, dig)
         if dig then turtle.digDown() end
         return
     end
-    
+
     while not turtle.placeDown() do print("Something blocks placement!") end
 
 end
@@ -285,10 +285,10 @@ function Robot.build_walls(self)
     self:move_to_coord(corner_near, false)
     -- while each y-layer
     while self.coord[2] <= corner_far[2] do
-        self:build_line({corner_far[1],corner_near[2],self.coord[3]})
-        self:build_line({corner_far[1],corner_far[2],self.coord[3]})
-        self:build_line({corner_near[1],corner_far[2],self.coord[3]})
-        self:build_line({corner_near[1],corner_near[1],self.coord[3]})
+        self:build_line({corner_far[1],corner_near[2],self.coord[3]}, 1)
+        self:build_line({corner_far[1],corner_far[2],self.coord[3]}, 2)
+        self:build_line({corner_near[1],corner_far[2],self.coord[3]}, 1)
+        self:build_line({corner_near[1],corner_near[1],self.coord[3]}, 2)
         self:move_horizontal(1)
     end
 
