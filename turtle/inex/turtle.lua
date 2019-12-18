@@ -51,6 +51,11 @@ Robot = {
     build_index = 1,
 }
 
+---- HELPERS ----------------------------------------------------------------
+function add_coords(a, b)
+    return {a[1]+b[1], a[2]+b[2], a[3]+b[3]}
+end
+
 function print_coords(coord)
     print(coord[1], coord[2], coord[3])
 end
@@ -68,6 +73,16 @@ function normalize_direction(direction)
     if direction < 0 then d = -1 end
     return d
 end
+
+function get_directions(a, b)
+    return {
+        normalize_direction(b[1] - a[1]),
+        normalize_direction(b[2] - a[2]),
+        normalize_direction(b[3] - a[3])
+    }
+end
+
+---- ROBOT METHODS ----------------------------------------------------------
 
 function Robot.move_horizontal(self, direction)
     if direction > 0 then
@@ -121,28 +136,74 @@ end
 
 function Robot.move_to_coord(self, target_coord, dig_path)
     -- first Y, then X, then Z
-    local directions = {
-        normalize_direction(target_coord[1] - self.coord[1]),
-        normalize_direction(target_coord[2] - self.coord[2]),
-        normalize_direction(target_coord[3] - self.coord[3])
-    }
+    local directions = get_directions(self.coord, target_coord)
     -- Y
     while self.coord[2] ~= target_coord[2] do
         self:move_horizontal(directions[2])
         print_coords(self.coord)
     end
     -- X
-    self:face_axis(1, directions[1])
     while self.coord[1] ~= target_coord[1] do
+        self:face_axis(1, directions[1])
         self:move_forward(1, directions[1])
         print_coords(self.coord)
     end
     -- Z
-    self:face_axis(3, directions[3])
     while self.coord[3] ~= target_coord[3] do
+        self:face_axis(3, directions[3])
         self:move_forward(3, directions[3])
         print_coords(self.coord)
     end
+
+end
+
+function Robot.refuel_if_need(self)
+    local level = turtle.getFuelLevel()
+    local needed = MAX_FUEL - level
+    if needed > 0 then
+        print("current fuel level=",level)
+        print("more fuel needed=",needed)
+        local n = math.floor(needed/FUEL_ITEM_VALUE)
+        local current_slot = turtle.getSelectedSlot()
+        turtle.select(FUEL_SLOT)
+        while not turtle.refuel(n) do print("Refueling failed, tried n=",n) end
+        -- back to original selected slot
+        turtle.select(current_slot)
+    end
+end
+
+function Robot.restock_if_need(self)
+    if self.build_index > table.getn(BUILD_SLOTS) then
+        local current_coord = self.coord
+        self:go_home_and_restock()
+        self:exit_home()
+        self:move_to_coord(current_coord)
+    end
+end
+
+function Robot.select_valid_build_slot(self)
+    while true do
+        turtle.select(BUILD_SLOTS[self.build_index])
+        self.validate_slot(BUILD_NAME)
+        local blocks_left = turtle.getItemCount()
+
+        if blocks_left < 1 then
+            print("out of blocks from", self.build_index)
+            self.build_index = self.build_index + 1
+            self.restock_if_need()
+        else
+            break
+        end
+    end
+end
+
+function Robot.build(self, dig)
+
+    self.select_valid_build_slot()
+    if turtle.detectDown() and dig then
+        turtle.digDown()
+    end
+    while not turtle.placeDown() do print("Something blocks placement!") end
 
 end
 
@@ -182,21 +243,6 @@ function Robot.restock_blocks(self)
     end
 end
 
-function Robot.refuel_if_need(self)
-    local level = turtle.getFuelLevel()
-    local needed = MAX_FUEL - level
-    if needed > 0 then
-        print("current fuel level=",level)
-        print("more fuel needed=",needed)
-        local n = math.floor(needed/FUEL_ITEM_VALUE)
-        local current_slot = turtle.getSelectedSlot()
-        turtle.select(FUEL_SLOT)
-        while not turtle.refuel(n) do print("Refueling failed, tried n=",n) end
-        -- back to original selected slot
-        turtle.select(current_slot)
-    end
-end
-
 function Robot.go_home_and_restock(self)
     self:move_to_coord({HOME_COORDS[1], HOME_COORDS[2], HOME_COORDS[3]+2}, false)
     self:move_to_coord(HOME_COORDS, false)
@@ -212,6 +258,15 @@ function Robot.exit_home(self)
     self:move_to_coord({HOME_COORDS[1], HOME_COORDS[2], HOME_COORDS[3]+2}, false)
 end
 
+function Robot.build_line(self, end_coord, axis)
+    local direction = get_directions(self.coord, end_coord)
+    self:build(false)
+    while self.coord[axis] ~= end_coord[axis] do
+        self:move_to_coord(add_coords(self.coord, direction))
+        self:build(true)
+    end
+end
+
 function Robot.build_walls(self)
     self:restock_fuel()
     self:restock_blocks()
@@ -219,8 +274,22 @@ function Robot.build_walls(self)
     self:restock_fuel()
 
     self:exit_home()
-    self:move_to_coord({0, 0, 5}, false)
-    self:move_to_coord({-5, 0, 5}, false)
+    --- START ---
+    local build_offset = {0, 0, 1} -- vector offset of turtle placing blocks
+    local corner_near = add_coords(CORNER_NEAR,build_offset)
+    local corner_far = add_coords(CORNER_FAR,build_offset)
+
+    self:move_to_coord(corner_near, false)
+    -- while each y-layer
+    while self.coord[2] <= corner_far[2] do
+        self:build_line({corner_far[1],corner_near[2],self.coord[3]})
+        self:build_line({corner_far[1],corner_far[2],self.coord[3]})
+        self:build_line({corner_near[1],corner_far[2],self.coord[3]})
+        self:build_line({corner_near[1],corner_near[1],self.coord[3]})
+        self:move_horizontal(1)
+    end
+
+    --- END ---
     self:go_home_and_restock()
 end
 
