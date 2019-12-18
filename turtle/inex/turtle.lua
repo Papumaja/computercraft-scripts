@@ -69,8 +69,9 @@ function axis_direction_to_face(axis, d)
 end
 
 function normalize_direction(direction)
-    local d = 1
-    if direction < 0 then d = -1 end
+    local d = 0
+    if direction > 0 then d = 1
+    elseif direction < 0 then d = -1 end
     return d
 end
 
@@ -201,8 +202,11 @@ function Robot.build(self, dig)
 
     self:select_valid_build_slot()
     if turtle.detectDown() then
-        if dig then turtle.digDown() end
-        return
+        if dig then
+            turtle.digDown()
+        else
+            return
+        end
     end
 
     while not turtle.placeDown() do print("Something blocks placement!") end
@@ -247,7 +251,7 @@ function Robot.restock_blocks(self)
 end
 
 function Robot.go_home_and_restock(self)
-    self:move_to_coord({HOME_COORDS[1], HOME_COORDS[2], HOME_COORDS[3]+2}, false)
+    self:move_to_coord({HOME_COORDS[1], self.coords[2], HOME_COORDS[3]+2}, false)
     self:move_to_coord(HOME_COORDS, false)
     self:face_axis(3, 1)
     self:restock_fuel()
@@ -285,10 +289,10 @@ function Robot.build_walls(self)
     self:move_to_coord(corner_near, false)
     -- while each y-layer
     while self.coord[2] <= corner_far[2] do
-        self:build_line({corner_far[1],corner_near[2],self.coord[3]}, 1)
-        self:build_line({corner_far[1],corner_far[2],self.coord[3]}, 2)
-        self:build_line({corner_near[1],corner_far[2],self.coord[3]}, 1)
-        self:build_line({corner_near[1],corner_near[1],self.coord[3]}, 2)
+        self:build_line({corner_far[1],self.coord[2], corner_near[3]}, 1)
+        self:build_line({corner_far[1],self.coord[2], corner_far[3]}, 3)
+        self:build_line({corner_near[1],self.coord[2], corner_far[3]}, 1)
+        self:build_line({corner_near[1],self.coord[2], corner_near[3]}, 3)
         self:move_horizontal(1)
     end
 
