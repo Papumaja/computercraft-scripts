@@ -200,9 +200,11 @@ end
 function Robot.build(self, dig)
 
     self:select_valid_build_slot()
-    if turtle.detectDown() and dig then
-        turtle.digDown()
+    if turtle.detectDown() then
+        if dig then turtle.digDown() end
+        return
     end
+    
     while not turtle.placeDown() do print("Something blocks placement!") end
 
 end
