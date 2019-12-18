@@ -21,13 +21,6 @@ PHASE_BUILD_ROOF = false
 -- Threshold of inventory stock before refill
 REFUEL_THRESHOLD = 5
 
--- Inventory slot for fuel
-FUEL_SLOT = 0
-
--- Block types used, others picked up in inventory are discarded
-BUILD_ID = 0
-FUEL_ID = 0
-
 -- Corner points (relative to home) of the rectangle to build
 CORNER_NEAR = {0,0,5}
 CORNER_FAR = {-20, 5, 10}
@@ -38,10 +31,24 @@ X_NEG = -1
 Z_POS = 2
 Z_NEG = -2
 
+-- Turtle settings -------------------------------
+MAX_FUEL = 160 --turtle.getFuelLimit()
+FUEL_ITEM_VALUE = 80
+-- Block types used, others picked up in inventory are discarded
+BUILD_NAME = "minecraft:stone"
+FUEL_NAME = "minecraft:coal"
+-- Inventory slot for fuel
+FUEL_SLOT = 1
+-- Inventory slots for building blocks
+BUILD_SLOTS = {2, 3}
+
+--------------------------------------------------
+
 -- object to store turtle state
 Robot = {
-    coord = HOME_COORDS,
-    face = Z_POS
+    coord = {HOME_COORDS[1], HOME_COORDS[2], HOME_COORDS[3]},
+    face = Z_POS,
+    build_index = 1,
 }
 
 function print_coords(coord)
@@ -82,6 +89,10 @@ end
 function Robot.move_forward(self, axis, direction)
     -- direction +1 or -1
     -- pre: turtle must face correct direction
+
+    -- TODO: rewrite refueling
+    self:refuel_if_need()
+
     if turtle.forward() then
         self.coord[axis] = self.coord[axis] + direction
     else
@@ -135,16 +146,88 @@ function Robot.move_to_coord(self, target_coord, dig_path)
 
 end
 
+function Robot.validate_slot(self, item_name)
+    -- Discard items in selected slot if name doesn't match
+    local data = turtle.getItemDetail()
+    if not data then return 0 end
+    if data.name ~= item_name then
+        turtle.drop()
+    end
+end
+
+function Robot.restock_fuel(self)
+    turtle.select(FUEL_SLOT)
+    self:validate_slot(FUEL_NAME)
+
+    local amount = turtle.getItemSpace()
+    success = false
+    while not success do
+        success = turtle.suckDown(amount)
+        --print("Sucking fuel from below...")
+    end
+
+end
+
+function Robot.restock_blocks(self)
+    for i = 1, table.getn(BUILD_SLOTS), 1 do
+        turtle.select(BUILD_SLOTS[i])
+        self:validate_slot(BUILD_NAME)
+
+        local amount = turtle.getItemSpace()
+        success = false
+        while not success do
+            success = turtle.suckUp(amount)
+            --print("Sucking blocks from above...")
+        end
+    end
+end
+
+function Robot.refuel_if_need(self)
+    local level = turtle.getFuelLevel()
+    local needed = MAX_FUEL - level
+    if needed > 0 then
+        print("current fuel level=",level)
+        print("more fuel needed=",needed)
+        local n = math.floor(needed/FUEL_ITEM_VALUE)
+        local current_slot = turtle.getSelectedSlot()
+        turtle.select(FUEL_SLOT)
+        while not turtle.refuel(n) do print("Refueling failed, tried n=",n) end
+        -- back to original selected slot
+        turtle.select(current_slot)
+    end
+end
+
+function Robot.go_home_and_restock(self)
+    self:move_to_coord({HOME_COORDS[1], HOME_COORDS[2], HOME_COORDS[3]+2}, false)
+    self:move_to_coord(HOME_COORDS, false)
+    self:face_axis(3, 1)
+    self:restock_fuel()
+    self:restock_blocks()
+    self:refuel_if_need()
+    self:restock_fuel()
+end
+
+function Robot.exit_home(self)
+    self:face_axis(3, 1)
+    self:move_to_coord({HOME_COORDS[1], HOME_COORDS[2], HOME_COORDS[3]+2}, false)
+end
+
 function Robot.build_walls(self)
-    turtle.refuel(1)
+    self:restock_fuel()
+    self:restock_blocks()
+    self:refuel_if_need()
+    self:restock_fuel()
+
+    self:exit_home()
     self:move_to_coord({0, 0, 5}, false)
     self:move_to_coord({-5, 0, 5}, false)
+    self:go_home_and_restock()
 end
 
 function main()
 
     if PHASE_BUILD_WALLS then
-        Robot:build_walls(coord)
+        Robot:build_walls()
     end
 
 end
