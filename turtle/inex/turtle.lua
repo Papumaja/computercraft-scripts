@@ -18,8 +18,8 @@ HOME_COORDS = {30,74,-301}
 PHASE_BUILD_WALLS = true
 
 -- Corner points (relative to home) of the rectangle to build
-CORNER_NEAR = {25,66,-247}
-CORNER_FAR = {-95, 66, -367}
+CORNER_NEAR = {23,68,-245}
+CORNER_FAR = {-93, 68, -365}
 --CORNER_FAR = {22, 70, -241}
 
 -- "enumerators" for possible turtle faces
@@ -188,7 +188,7 @@ function Robot.restock_fuel_if_need(self)
         local current_coord = {self.coord[1], self.coord[2], self.coord[3]}
         self:go_home_and_restock()
         self:exit_home()
-        self:move_to_coord(current_coord)
+        self:move_to_coord(current_coord, BREAK_THINGS_GOING_HOME)
         self.refueling = false
     end
     turtle.select(current_slot)
@@ -199,7 +199,7 @@ function Robot.restock_if_need(self)
         local current_coord = {self.coord[1], self.coord[2], self.coord[3]}
         self:go_home_and_restock()
         self:exit_home()
-        self:move_to_coord(current_coord)
+        self:move_to_coord(current_coord, BREAK_THINGS_GOING_HOME)
     end
 end
 
