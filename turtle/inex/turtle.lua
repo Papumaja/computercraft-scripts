@@ -1,5 +1,5 @@
 --[[
-Small ComputerCraft Lua-script to build simple cubes in an area
+Small ComputerCraft Lua-script to build simple shapes in an area
 author: papumaja
 DTFYW
 Comes 'as is' with no warranty of any kind yadda yadda
@@ -10,27 +10,31 @@ Turtle will expect to start at HOME_COORDS (x,y,z),
 FACING towards positive z
 It will expect to find a fuel chest BELOW
 and a material chest ABOVE of HOME_COORDS
+Building schematics should leave turtle ALWAYS having free space above it
 ]]
-HOME_COORDS = {0,0,0}
+HOME_COORDS = {30,74,-301}
 
 -- optional phases
 PHASE_BUILD_WALLS = true
 
 -- Corner points (relative to home) of the rectangle to build
-CORNER_NEAR = {0,0,5}
-CORNER_FAR = {-5, 0, 10}
+CORNER_NEAR = {25,66,-247}
+CORNER_FAR = {-95, 66, -367}
+--CORNER_FAR = {22, 70, -241}
 
 -- "enumerators" for possible turtle faces
 X_POS = 1
 X_NEG = -1
 Z_POS = 2
 Z_NEG = -2
+INITIAL_FACE = X_NEG
 
 -- Turtle settings -------------------------------
-MAX_FUEL = 160 --turtle.getFuelLimit()
+MAX_FUEL = 1000 --turtle.getFuelLimit()
 FUEL_ITEM_VALUE = 80
 -- Will break obstructions
 BREAK_THINGS = true
+BREAK_THINGS_GOING_HOME = true
 -- Block types used, others picked up in inventory are discarded
 BUILD_NAME = "minecraft:stone"
 FUEL_NAME = "minecraft:coal"
@@ -39,14 +43,14 @@ FUEL_SLOT = 1
 -- Threshold of inventory stock before refill
 REFUEL_THRESHOLD = 5
 -- Inventory slots for building blocks
-BUILD_SLOTS = {2, 3}
+BUILD_SLOTS = {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
 
 --------------------------------------------------
 
 -- object to store turtle state
 Robot = {
     coord = {HOME_COORDS[1], HOME_COORDS[2], HOME_COORDS[3]},
-    face = Z_POS,
+    face = INITIAL_FACE,
     build_index = 1,
     refueling = false
 }
@@ -54,6 +58,10 @@ Robot = {
 ---- HELPERS ----------------------------------------------------------------
 function add_coords(a, b)
     return {a[1]+b[1], a[2]+b[2], a[3]+b[3]}
+end
+
+function substract_coords(a, b)
+    return {a[1]-b[1], a[2]-b[2], a[3]-b[3]}
 end
 
 function print_coords(coord)
@@ -65,6 +73,14 @@ function axis_direction_to_face(axis, d)
     elseif (axis == 1 and d == -1)  then return X_NEG
     elseif (axis == 3 and d == 1) then return Z_POS
     elseif (axis == 3 and d == -1)  then return Z_NEG
+    else return false end
+end
+
+function face_to_axis_direction(face)
+    if face == X_POS then return 1, 1
+    elseif face == X_NEG then return 1, -1
+    elseif face == Z_POS then return 3, 1
+    elseif face == Z_NEG then return 3, -1
     else return false end
 end
 
@@ -121,10 +137,10 @@ function Robot.move_forward(self, axis, direction, dig_path)
 end
 
 function Robot.update_face_left(self)
-    if self.face == Z_POS then self.face = X_NEG
-    elseif self.face == X_NEG then self.face = Z_NEG
-    elseif self.face == Z_NEG then self.face = X_POS
-    elseif self.face == X_POS then self.face = Z_POS
+    if self.face == Z_NEG then self.face = X_NEG
+    elseif self.face == X_NEG then self.face = Z_POS
+    elseif self.face == Z_POS then self.face = X_POS
+    elseif self.face == X_POS then self.face = Z_NEG
     else return false end
 end
 
@@ -271,10 +287,20 @@ function Robot.restock_blocks(self)
     self.build_index = 1
 end
 
+function Robot.home_enter_node(self)
+    local exit_offset = {0,0,0}
+    local axis, d = face_to_axis_direction(INITIAL_FACE)
+    exit_offset[axis] = exit_offset[axis] + 2*d
+    return add_coords(HOME_COORDS, exit_offset)
+end
+
 function Robot.go_home_and_restock(self)
-    self:move_to_coord({HOME_COORDS[1], self.coord[2], HOME_COORDS[3]+2}, false)
+    local enter_node = self:home_enter_node()
+    local return_h = math.max(self.coord[2], enter_node[2])
+    enter_node = add_coords(enter_node, {0,return_h,0})
+    self:move_to_coord(self:home_enter_node(), BREAK_THINGS_GOING_HOME)
     self:move_to_coord(HOME_COORDS, false)
-    self:face_axis(3, 1)
+    self:face_axis(face_to_axis_direction(INITIAL_FACE))
     self:restock_fuel()
     self:restock_blocks()
     self:refuel_if_need()
@@ -282,8 +308,8 @@ function Robot.go_home_and_restock(self)
 end
 
 function Robot.exit_home(self)
-    self:face_axis(3, 1)
-    self:move_to_coord({HOME_COORDS[1], HOME_COORDS[2], HOME_COORDS[3]+2}, false)
+    self:face_axis(face_to_axis_direction(INITIAL_FACE))
+    self:move_to_coord(self:home_enter_node(), false)
 end
 
 function Robot.build_line(self, end_coord, axis)
@@ -305,14 +331,16 @@ function Robot.build_object(self, schematic)
     --- START ---
     local build_offset = {0, 0, 1} -- vector offset of turtle placing blocks
 
-    self:move_to_coord(corner_near, BREAK_THINGS)
-
-    -- for each layer
-    for i = 1, table.getn(schematic), 1 do
-        -- place each block
-        for j = 1, table.getn(schematic[i]) do
-            self:move_to_coord(add_coords(schematic[i][j], build_offset))
+    -- place each block
+    while true do
+        local _, coord = coroutine.resume(schematic, CORNER_NEAR, CORNER_FAR)
+        print(coord)
+        if coord then
+            print(coord)
+            self:move_to_coord(add_coords(coord, build_offset), BREAK_THINGS)
             self:build(BREAK_THINGS)
+        else
+            break
         end
     end
 
@@ -321,47 +349,55 @@ function Robot.build_object(self, schematic)
 end
 
 function pyramid_schematic(near, far)
-    layers = {}
-    bottom_y = near[2]
-    y = bottom_y
-    directions = get_directions(near, far)
+    -- yields coordinates from pyramid schematic one by one
+    --local layers = {}
+    local bottom_y = near[2]
+    local y = bottom_y
+    local directions = get_directions(near, far)
     while true do
-        layer = {}
+        --layer = {}
         -- x-side 1 (not both in same loop to optimize building order)
         for x = near[1], far[1], directions[1] do
-            table.insert(layer, {x, y, near[3]})
+            --table.insert(layer, {x, y, near[3]})
+            coroutine.yield({x, y, near[3]})
         end
         -- z-side 1
         for z = near[3], far[3], directions[3] do
-            table.insert(layer, {far[1], y, z})
+            --table.insert(layer, {far[1], y, z})
+            coroutine.yield({far[1], y, z})
         end
         -- x-side 2
         for x = far[1], near[1], -directions[1] do
-            table.insert(layer, {x, y, far[3]})
+            --table.insert(layer, {x, y, far[3]})
+            coroutine.yield({x, y, far[3]})
         end
         -- z-side 2
         for z = far[3], near[3], -directions[3] do
-            table.insert(layer, {near[1], y, z})
+            --table.insert(layer, {near[1], y, z})
+            coroutine.yield({near[1], y, z})
         end
         -- append layer
-        table.insert(layers, layer)
+        -- table.insert(layers, layer)
 
         -- final layer, break out
-        if far[1] == near[1] or far[3] == near[3] then
+        final_x = (far[1] - near[1])*directions[1] <= 0
+        final_z = (far[3] - near[3])*directions[3] <= 0
+        if final_x or final_y then
             break
         end
 
         -- update square coords
         near = add_coords(near, directions)
-        far = add_coords(far, -directions)
+        far = substract_coords(far, directions)
         y = y+1
     end
 
-    return layers
+    --return layers
+    return false
 end
 
 function main()
-    local schematic = pyramid_schematic(CORNER_NEAR, CORNER_FAR)
+    local schematic = coroutine.create(pyramid_schematic)
 
     if PHASE_BUILD_WALLS then
         Robot:build_object(schematic)
