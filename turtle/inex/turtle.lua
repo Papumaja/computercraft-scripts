@@ -15,12 +15,10 @@ HOME_COORDS = {0,0,0}
 
 -- optional phases
 PHASE_BUILD_WALLS = true
-PHASE_EXCAVATE_INTERIOR = false
-PHASE_BUILD_ROOF = false
 
 -- Corner points (relative to home) of the rectangle to build
 CORNER_NEAR = {0,0,5}
-CORNER_FAR = {-4, 3, 7}
+CORNER_FAR = {-5, 0, 10}
 
 -- "enumerators" for possible turtle faces
 X_POS = 1
@@ -297,7 +295,7 @@ function Robot.build_line(self, end_coord, axis)
     end
 end
 
-function Robot.build_walls(self)
+function Robot.build_object(self, schematic)
     self:restock_fuel()
     self:restock_blocks()
     self:refuel_if_need()
@@ -306,27 +304,67 @@ function Robot.build_walls(self)
     self:exit_home()
     --- START ---
     local build_offset = {0, 0, 1} -- vector offset of turtle placing blocks
-    local corner_near = add_coords(CORNER_NEAR,build_offset)
-    local corner_far = add_coords(CORNER_FAR,build_offset)
 
     self:move_to_coord(corner_near, BREAK_THINGS)
-    -- while each y-layer
-    while self.coord[2] <= corner_far[2] do
-        self:build_line({corner_far[1],self.coord[2], corner_near[3]}, 1)
-        self:build_line({corner_far[1],self.coord[2], corner_far[3]}, 3)
-        self:build_line({corner_near[1],self.coord[2], corner_far[3]}, 1)
-        self:build_line({corner_near[1],self.coord[2], corner_near[3]}, 3)
-        while not self:move_horizontal(1, BREAK_THINGS) do print("Obstruction above") end
+
+    -- for each layer
+    for i = 1, table.getn(schematic), 1 do
+        -- place each block
+        for j = 1, table.getn(schematic[i]) do
+            self:move_to_coord(add_coords(schematic[i][j], build_offset))
+            self:build(BREAK_THINGS)
+        end
     end
 
     --- END ---
     self:go_home_and_restock()
 end
 
+function pyramid_schematic(near, far)
+    layers = {}
+    bottom_y = near[2]
+    y = bottom_y
+    directions = get_directions(near, far)
+    while true do
+        layer = {}
+        -- x-side 1 (not both in same loop to optimize building order)
+        for x = near[1], far[1], directions[1] do
+            table.insert(layer, {x, y, near[3]})
+        end
+        -- z-side 1
+        for z = near[3], far[3], directions[3] do
+            table.insert(layer, {far[1], y, z})
+        end
+        -- x-side 2
+        for x = far[1], near[1], -directions[1] do
+            table.insert(layer, {x, y, far[3]})
+        end
+        -- z-side 2
+        for z = far[3], near[3], -directions[3] do
+            table.insert(layer, {near[1], y, z})
+        end
+        -- append layer
+        table.insert(layers, layer)
+
+        -- final layer, break out
+        if far[1] == near[1] or far[3] == near[3] then
+            break
+        end
+
+        -- update square coords
+        near = add_coords(near, directions)
+        far = add_coords(far, -directions)
+        y = y+1
+    end
+
+    return layers
+end
+
 function main()
+    local schematic = pyramid_schematic(CORNER_NEAR, CORNER_FAR)
 
     if PHASE_BUILD_WALLS then
-        Robot:build_walls()
+        Robot:build_object(schematic)
     end
 
 end
