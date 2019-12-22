@@ -18,7 +18,7 @@ HOME_COORDS = {30,74,-301}
 PHASE_BUILD_WALLS = true
 
 -- Corner points (relative to home) of the rectangle to build
-CORNER_NEAR = {23,68,-245}
+CORNER_NEAR = {23,68,-249}
 CORNER_FAR = {-93, 68, -365}
 --CORNER_FAR = {22, 70, -241}
 
